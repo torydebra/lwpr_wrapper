@@ -25,22 +25,22 @@ include_directories(
 #############
 ## MESSAGES ##
 #############
-rosidl_generate_interfaces(${PROJECT_NAME}_msgs
+rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/LWPRInfo.msg"
   "msg/RfsInfo.msg"
   DEPENDENCIES std_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}_msgs" "rosidl_typesupport_cpp")
+rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 
 ###########
 ## Build ##
 ###########
 
-add_library(${PROJECT_NAME} SHARED
+add_library(${PROJECT_NAME}_lib SHARED
   src/LWPRWrapper.cpp
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE
+target_link_libraries(${PROJECT_NAME}_lib PRIVATE
   lwpr::lwpr
   "${cpp_typesupport_target}"
 )
@@ -66,7 +66,7 @@ endif()
 ## Install ##
 #############
 
-target_include_directories(${PROJECT_NAME}
+target_include_directories(${PROJECT_NAME}_lib
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -78,12 +78,12 @@ install(
 )
 
 install(
-  TARGETS ${PROJECT_NAME}
-  EXPORT export_${PROJECT_NAME}
+  TARGETS ${PROJECT_NAME}_lib
+  EXPORT export_${PROJECT_NAME}_lib
   DESTINATION lib
 )
 
 ament_export_include_directories(include)
-ament_export_libraries(${PROJECT_NAME})
-ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_libraries(${PROJECT_NAME}_lib)
+ament_export_targets(export_${PROJECT_NAME}_lib HAS_LIBRARY_TARGET)
 ament_package()

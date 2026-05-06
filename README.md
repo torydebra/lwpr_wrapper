@@ -5,7 +5,10 @@
 - ros2 (some message utilities)
 
 ## How to compile
-- `colcon build`, make sure you provide lwpr correct installation path
+- make sure you provide lwpr correct installation path, like 
+  `lwpr_DIR  /home/user/lwpr_ws/install/lib/cmake/lwpr`        
+
+- `colcon build`, 
 
 ## How to use
 ### CmakeLists.txt
