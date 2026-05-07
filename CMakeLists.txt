@@ -45,6 +45,9 @@ target_link_libraries(${PROJECT_NAME}_lib PRIVATE
   "${cpp_typesupport_target}"
 )
 
+set_target_properties(${PROJECT_NAME}_lib PROPERTIES
+  INSTALL_RPATH_USE_LINK_PATH TRUE
+)
 
 #############
 ## Linters ##
