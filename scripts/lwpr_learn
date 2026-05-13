@@ -1,0 +1,471 @@
+#!/usr/bin/env python3
+
+import numpy as np
+from lwpr import LWPR
+import os
+
+from matplotlib import pyplot as plt
+
+class LwprLearner:
+    def __init__(self):
+
+        n_input = 3
+        n_output = 2
+        # Default is one
+        expected_in_min = np.array([0, -3, 0])
+        expected_in_max = np.array([5,  3, 5])
+        expected_out_min = np.array([-0.5, -0.5]) # joint limits
+        expected_out_max = np.array([0.5, 0.5]) # joint limits
+
+        self.model = LWPR(n_input,n_output)
+
+        # The expected range of each input, divided by 2, just be consistent with init_D
+        # EG. if inputs are 2D position, and we are exploring a square of 2 by 2 meters, norm_is should be [1,1],
+        self.model.norm_in = (expected_in_max[0:n_input] - expected_in_min[0:n_input]) / 2.0
+        self.model.norm_out = (expected_out_max[0:n_output] - expected_out_min[0:n_output]) / 2.0
+
+        #Set to False useful for finding right parameters 
+        self.model.update_D = True
+        self.model.init_D = 10*np.eye(n_input) # default: 25
+        self.model.init_alpha = 250*np.ones([n_input,n_input]) # default: 50
+        self.model.meta = False
+
+        bag_path = '/home/user/ros2_ws/src/steadfast_env/bag'
+        bag_name = 'rosbag2_2026_04_22-14_57_51'
+
+        self.pose = np.load(
+            os.path.join(bag_path, bag_name, '_drone0_ground_truth_pose.npy'))
+        
+        self.gimbal_attitude = np.load(
+            os.path.join(bag_path, bag_name, '_drone0_sensor_measurements_gimbal_attitude.npy'))
+        
+        assert self.pose.shape[0] == self.gimbal_attitude.shape[0], "Mismatched number of samples"
+
+        for i in range(self.pose.shape[0]):
+            assert self.pose[i, 0] == self.gimbal_attitude[i, 0], f"Timestamp mismatch at index {i}"
+        
+
+    def prepare_data(self, train_ratio=0.8, shuffle=True, seed=None):
+
+        # Extract data
+        X = self.pose[:, 1:self.model.nIn+1].astype(np.float64, copy=False)
+        
+        #Roll we never care
+        y = self.gimbal_attitude[:, 1:self.model.nOut+1].astype(np.float64, copy=False)
+
+        N = X.shape[0]
+        indices = np.arange(N)
+
+        if shuffle:
+            rng = np.random.default_rng(seed)
+            rng.shuffle(indices)
+
+        split = int(train_ratio * N)
+
+        train_idx = indices[:split]
+        test_idx  = indices[split:]
+
+        # Train set
+        if X.ndim == 1:
+            self.x_train = X[train_idx, None]
+        else:
+            self.x_train = X[train_idx]
+
+        if y.ndim == 1:
+            self.y_train = y[train_idx, None] #ensure y has shape (N, nOut)
+        else:
+            self.y_train = y[train_idx]
+
+        # Test set
+        if X.ndim == 1:
+            self.x_test = X[test_idx, None]
+        else:
+            self.x_test = X[test_idx]
+        if y.ndim == 1:
+            self.y_test = y[test_idx, None]
+        else:
+            self.y_test = y[test_idx]
+
+        print(self.model)
+
+
+    def train(self, n_epoch: int = 1):
+        """
+        If the training set is small, the samples need to be presented to LWPR multiple times in random order.
+        So we shuffle at each epoch
+        """
+
+        self.train_mse = np.zeros((n_epoch, self.model.nOut))
+        self.train_nmse = np.zeros((n_epoch, self.model.nOut))
+        self.test_mse = np.zeros((n_epoch, self.model.nOut))
+        self.test_nmse = np.zeros((n_epoch, self.model.nOut))
+        self.test_wmse = np.zeros((n_epoch, self.model.nOut))
+
+        for e in range(n_epoch):
+
+            indices = np.random.permutation(self.x_train.shape[0])
+
+            err_acc = np.zeros(self.model.nOut)
+
+            for i in indices:
+
+                yp = self.model.update(self.x_train[i], self.y_train[i])
+
+                err_acc = err_acc + (self.y_train[i] - yp)**2
+
+            self.train_mse[e] = err_acc / self.x_train.shape[0]
+            self.train_nmse[e] = self.train_mse[e] / np.var(self.y_train, axis=0)
+
+            self.test_mse[e], self.test_nmse[e], self.test_wmse[e] = self.test()
+
+            print(self.model)
+            print(f'[Training] #Epoch: {e+1} #Data: {self.model.n_data} #RFs: {self.model.num_rfs} MSE={self.train_mse[e]} nMSE={self.train_nmse[e]}')
+            print(f"[Testing] #Epoch: {e+1} MSE={self.test_mse[e]}, rootMSE={np.sqrt(self.test_mse[e])} nMSE={self.test_nmse[e]}, wMSE={self.test_wmse[e]}")
+
+
+    def test(self):
+
+        if self.x_test.shape[0] == 0:
+            raise ValueError("Test set is empty")
+
+        # ---- normalize output shape ----
+        if self.y_test.ndim == 1:
+            y_test = self.y_test[:, None]
+        else:
+            y_test = self.y_test
+
+        N_test, n_out = y_test.shape
+
+        self.y_pred = np.zeros((N_test, n_out))
+        self.conf_pred = np.zeros((N_test, n_out))
+        self.maxw_pred = np.zeros((N_test, n_out))
+
+        mse = np.zeros(n_out)
+        w = np.zeros(n_out)
+        wmse = np.zeros(n_out)
+
+        for i in range(N_test):
+            yp, cp, maxw = self.model.predict_conf_maxw(self.x_test[i])
+            #yp, cp, maxw = self.model.predict_conf_maxw(np.array([1,4], dtype=np.float64))
+            yp = np.atleast_1d(yp)
+            cp = np.atleast_1d(cp)
+            maxw = np.atleast_1d(maxw)
+
+            for maxw_i in range(maxw.shape[0]):
+                if (maxw[maxw_i] < self.model.w_gen):
+                    print('\033[93m'+ f"WARN: MaxW too low {maxw} (conf: {cp}) for output {maxw_i} with input {self.x_test[i]} the model should be updated with this sample")
+
+            self.y_pred[i] = yp
+            self.conf_pred[i] = cp
+            self.maxw_pred[i] = maxw
+
+            err2 = (y_test[i] - yp) ** 2
+            mse += err2
+            w += 1.0 / (cp ** 2)
+            wmse += err2 / (cp ** 2)
+
+        mse /= N_test
+        nmse = mse / np.var(y_test, axis=0)
+        wmse /= w
+
+        return mse, nmse, wmse
+
+    def analyze_rf(self):
+        """
+        WARNING: w of the RF is updated only during update, after each update call, never in the prediction call
+        """
+        for out in range(self.model.nOut):
+            for rfi in range(self.model.num_rfs[out]):
+                w = self.model.rf_w(out, rfi)
+                print (f'OUT #{out}, RF {rfi+1}/{self.model.num_rfs[out]}: weight {w!r}')
+
+    def plot_train_mse(self):
+
+        n_out = self.model.nOut
+
+        fig, axes = plt.subplots(
+            2, n_out,
+            sharex=True,
+            figsize=(4 * n_out, 6)
+        )
+
+        # If nOut == 1, axes is 1D → normalize it
+        if n_out == 1:
+            axes = np.array(axes).reshape(2, 1)
+
+        for k in range(n_out):
+
+            # ---- nMSE (top row) ----
+            ax = axes[0, k]
+            ax.plot(self.train_nmse[:, k])
+            ax.set_title(f"Output {k}")
+            ax.set_ylabel("nMSE")
+            ax.grid(True)
+
+            # ---- MSE (bottom row) ----
+            ax = axes[1, k]
+            ax.plot(self.train_mse[:, k])
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel("MSE")
+            ax.grid(True)
+
+        fig.suptitle("Training learning curves", fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+    def plot_test_mse(self):
+
+        n_out = self.model.nOut
+
+        fig, axes = plt.subplots(
+            3, n_out,
+            sharex=True,
+            figsize=(4 * n_out, 8)
+        )
+
+        # If nOut == 1, normalize axes shape to (3, 1)
+        if n_out == 1:
+            axes = np.array(axes).reshape(3, 1)
+
+        for k in range(n_out):
+
+            # ---- nMSE (top row) ----
+            ax = axes[0, k]
+            ax.plot(self.test_nmse[:, k])
+            ax.set_title(f"Output {k}")
+            ax.set_ylabel("nMSE")
+            ax.grid(True)
+
+            # ---- MSE (middle row) ----
+            ax = axes[1, k]
+            ax.plot(self.test_mse[:, k])
+            ax.set_ylabel("MSE")
+            ax.grid(True)
+
+            # ---- wMSE (bottom row) ----
+            ax = axes[2, k]
+            ax.plot(self.test_wmse[:, k])
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel("wMSE")
+            ax.grid(True)
+
+        fig.suptitle("Testing learning curves", fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+
+    def plot_2DInput_NDoutput_results(
+        self,
+        x_test: np.ndarray,
+        y_pred: np.ndarray,
+        conf_pred: np.ndarray,
+        index: tuple[int, int] = (0, 1),
+    ):
+        x_test = np.asarray(x_test)
+        y_pred = np.asarray(y_pred)
+        conf_pred = np.asarray(conf_pred)
+
+        # ---- checks ----
+        if x_test.ndim != 2:
+            raise ValueError(f"x_test must be 2D, got {x_test.shape}")
+
+        n_in = x_test.shape[1]
+
+        if len(index) != 2:
+            raise ValueError("index must be a tuple of length 2")
+
+        i0, i1 = index
+        if not (0 <= i0 < n_in and 0 <= i1 < n_in):
+            raise ValueError(f"index {index} out of bounds for input dim {n_in}")
+
+        if y_pred.ndim != 2:
+            raise ValueError(f"y_pred must have shape (N, nOut), got {y_pred.shape}")
+
+        if conf_pred.shape != y_pred.shape:
+            raise ValueError("conf_pred must have the same shape as y_pred")
+
+        n_out = y_pred.shape[1]
+
+        # ---- ensure train/test outputs are 2D ----
+        y_train = self.y_train[:, None] if self.y_train.ndim == 1 else self.y_train
+        y_test  = self.y_test[:, None]  if self.y_test.ndim == 1  else self.y_test
+
+        # ---- figure layout ----
+        fig = plt.figure(figsize=(5 * n_out, 12))
+
+        for k in range(n_out):
+
+            # ===== Row 0: training data =====
+            ax = fig.add_subplot(3, n_out, 1 + k, projection="3d")
+            ax.scatter(
+                self.x_train[:, i0],
+                self.x_train[:, i1],
+                y_train[:, k],
+                s=10
+            )
+            ax.set_title(f"Train – Output {k}")
+            ax.set_xlabel(f"Input {i0}")
+            ax.set_ylabel(f"Input {i1}")
+            ax.set_zlabel(f"out[{k}]")
+
+            # ===== Row 1: test data =====
+            ax = fig.add_subplot(3, n_out, 1 + n_out + k, projection="3d")
+            ax.scatter(
+                self.x_test[:, i0],
+                self.x_test[:, i1],
+                y_test[:, k],
+                s=10
+            )
+            ax.set_title(f"Test - Output {k}")
+            ax.set_xlabel(f"Input {i0}")
+            ax.set_ylabel(f"Input {i1}")
+            ax.set_zlabel(f"out[{k}]")
+
+            # ===== Row 2: predictions =====
+            ax = fig.add_subplot(3, n_out, 1 + 2 * n_out + k, projection="3d")
+            sc = ax.scatter(
+                x_test[:, i0],
+                x_test[:, i1],
+                y_pred[:, k],
+                c=conf_pred[:, k],
+                cmap="viridis",
+                s=8
+            )
+            ax.set_title(f"Prediction - Output {k}")
+            ax.set_xlabel(f"Input {i0}")
+            ax.set_ylabel(f"Input {i1}")
+            ax.set_zlabel(f"out[{k}]")
+
+            # colorbar per output
+            cbar = fig.colorbar(sc, ax=ax, shrink=0.7)
+            cbar.set_label("confidence")
+
+        plt.tight_layout()
+        plt.show()
+
+
+    def plot_3DInput_NDoutput_results(
+        self,
+        x_test: np.ndarray,
+        y_pred: np.ndarray,
+    ):
+        x_test = np.asarray(x_test)
+        y_pred = np.asarray(y_pred)
+
+        y_train = self.y_train[:, None] if self.y_train.ndim == 1 else self.y_train
+        y_test  = self.y_test[:, None]  if self.y_test.ndim == 1  else self.y_test
+
+        n_out = y_pred.shape[1]
+
+        fig = plt.figure(figsize=(5 * n_out, 12))
+
+
+        for k in range(n_out):
+
+            # ---- shared color scale per column ----
+            vmin = min(
+                y_train[:, k].min(),
+                y_test[:, k].min(),
+                y_pred[:, k].min()
+            )
+            vmax = max(
+                y_train[:, k].max(),
+                y_test[:, k].max(),
+                y_pred[:, k].max()
+            )
+
+            # ===== Row 0: training =====
+            ax = fig.add_subplot(3, n_out, 1 + k, projection="3d")
+            sc = ax.scatter(
+                self.x_train[:, 0],
+                self.x_train[:, 1],
+                self.x_train[:, 2],
+                c=y_train[:, k],
+                cmap="viridis",
+                vmin=vmin,
+                vmax=vmax,
+                s=10
+            )
+            ax.set_title(f"Train – Output {k}")
+            fig.colorbar(sc, ax=ax, shrink=0.7)
+
+            # ===== Row 1: test =====
+            ax = fig.add_subplot(3, n_out, 1 + n_out + k, projection="3d")
+            sc = ax.scatter(
+                self.x_test[:, 0],
+                self.x_test[:, 1],
+                self.x_test[:, 2],
+                c=y_test[:, k],
+                cmap="viridis",
+                vmin=vmin,
+                vmax=vmax,
+                s=10
+            )
+            ax.set_title(f"Test – Output {k}")
+            fig.colorbar(sc, ax=ax, shrink=0.7)
+
+            # ===== Row 2: prediction =====
+            ax = fig.add_subplot(3, n_out, 1 + 2 * n_out + k, projection="3d")
+            sc = ax.scatter(
+                x_test[:, 0],
+                x_test[:, 1],
+                x_test[:, 2],
+                c=y_pred[:, k],
+                cmap="viridis",
+                vmin=vmin,
+                vmax=vmax,
+                s=10
+            )
+            ax.set_title(f"Prediction – Output {k}")
+            fig.colorbar(sc, ax=ax, shrink=0.7)
+
+
+        plt.tight_layout()
+        plt.show()
+
+
+    def plot_any(self, data:np.ndarray):
+
+        plt.figure()
+        plt.scatter(np.arange(len(data)), data)
+
+        plt.tight_layout()
+        plt.show()
+
+
+if __name__ == "__main__":
+
+    n_epoch = 1
+    plot = True
+
+    lwpr_learner = LwprLearner()
+    lwpr_learner.prepare_data()
+    lwpr_learner.train(n_epoch=n_epoch)
+    lwpr_learner.test()
+
+
+
+
+    if plot:
+        plt.ion()
+        if n_epoch > 1:
+            lwpr_learner.plot_train_mse()
+            lwpr_learner.plot_test_mse()
+        
+        if lwpr_learner.model.nIn > 2:
+            lwpr_learner.plot_2DInput_NDoutput_results(
+                    lwpr_learner.x_test,
+                    lwpr_learner.y_pred,
+                    lwpr_learner.conf_pred,
+                    index=(0,1)
+                )
+        
+        if lwpr_learner.model.nIn > 2:
+            lwpr_learner.plot_3DInput_NDoutput_results(
+                lwpr_learner.x_test,
+                lwpr_learner.y_pred,
+            )
+
+        # lwpr_learner.plot_any(lwpr_learner.conf_pred)
+        # lwpr_learner.plot_any(lwpr_learner.maxw_pred)
+        plt.show(block=True)   # <-- keeps windows open
