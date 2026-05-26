@@ -1,20 +1,30 @@
+#pragma once
+
 #include <lwpr.hh> //here to avoid external library the necessity to find lwpr lib
-#include <lwpr_wrapper/LWPRWrapper.hpp>
+#include <algorithm>
+#include <numeric>
+#include <iostream>
+#include <chrono>
 
-using lwpr_wrapper::LWPRWrapper;
+namespace lwpr_wrapper
+{
 
-struct lwpr_wrapper::LWPRWrapper::Impl {
+template<int N_IN, int N_OUT, int N_SAMPLES>
+struct LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::Impl {
     std::unique_ptr<LWPR_Object> lwpr;
 
     Impl(int n_in, int n_out)
         : lwpr(std::make_unique<LWPR_Object>(n_in, n_out)) {}
 };
 
-LWPRWrapper::LWPRWrapper(){}
+template<int N_IN, int N_OUT, int N_SAMPLES>
+LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::LWPRWrapper() {}
 
-LWPRWrapper::~LWPRWrapper() = default;
+template<int N_IN, int N_OUT, int N_SAMPLES>
+LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::~LWPRWrapper() = default;
 
-bool LWPRWrapper::init() {
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::init() {
 
     // Default is one
     Eigen::Vector<double, N_IN> expected_in_min;
@@ -36,7 +46,7 @@ bool LWPRWrapper::init() {
     expected_out_min << -0.5, -1.3; // joint limits
     expected_out_max << 1.48, 1.3; // joint limits
     predict_cutoff_ = 0.001; //default 0.001
-    impl_ = std::make_unique<Impl>(N_IN,N_OUT);
+    impl_ = std::make_unique<Impl>(N_IN, N_OUT);
 
     // The expected range of each input, divided by 2, just be consistent with init_D
     // EG. if inputs are 2D position, and we are exploring a square of 2 by 2 meters, norm_is should be [1,1],
@@ -85,12 +95,12 @@ bool LWPRWrapper::init() {
     return true;
 }
 
-
-bool LWPRWrapper::run(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::run(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& sample) {
 
     std::cout << "sample is " << sample.transpose() << std::endl;
-    prediction_out_ = impl_->lwpr->predict(input, prediction_conf_, prediction_maxW_, predict_cutoff_);
+    predict(input);
     std::cout << "predicted with maxW=" << prediction_maxW_.transpose() << std::endl;
     
     bool to_update = false;
@@ -121,7 +131,8 @@ bool LWPRWrapper::run(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input
     return true;
 }
 
-bool LWPRWrapper::add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output) {
 
     if (samples_counter_ == N_SAMPLES) {
@@ -136,12 +147,14 @@ bool LWPRWrapper::add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>
     return true;
 }
 
-bool LWPRWrapper::delete_all_samples() {
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::delete_all_samples() {
     samples_counter_ = 0;
     return true;
 }
 
-bool LWPRWrapper::train_immediately() { 
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train_immediately() { 
 
     if (samples_counter_ == 0) {
         std::cout << "Cannot train, no samples" << std::endl;
@@ -168,13 +181,15 @@ bool LWPRWrapper::train_immediately() {
     return true;
 }
 
-Eigen::VectorXd LWPRWrapper::train_single(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
+template<int N_IN, int N_OUT, int N_SAMPLES>
+Eigen::VectorXd LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train_single(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output) { 
 
     return (impl_->lwpr->update(input, output));
 }
 
-bool LWPRWrapper::train(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output) {
 
     if (samples_counter_ < N_SAMPLES) { //accumulate
@@ -188,7 +203,8 @@ bool LWPRWrapper::train(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& inp
     return true;
 }
 
-bool LWPRWrapper::predict(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input) {
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::predict(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input) {
 
     //std::cout << "input is " << input.transpose() << std::endl;
     prediction_out_ = impl_->lwpr->predict(input, prediction_conf_, prediction_maxW_, predict_cutoff_);
@@ -197,11 +213,23 @@ bool LWPRWrapper::predict(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& i
     return true;
 }
 
+template<int N_IN, int N_OUT, int N_SAMPLES>
+Eigen::Vector<double, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::get_prediction() const {
+    return prediction_out_;
+}
 
-Eigen::Vector<double, LWPRWrapper::N_OUT> LWPRWrapper::get_prediction() const {return prediction_out_;}
-Eigen::Vector<double, LWPRWrapper::N_OUT> LWPRWrapper::get_prediction_conf() const {return prediction_conf_;}
-Eigen::Vector<double, LWPRWrapper::N_OUT> LWPRWrapper::get_prediction_maxW() const {return prediction_maxW_;}
-std::array<bool, LWPRWrapper::N_OUT> LWPRWrapper::is_confident_about_out() const {    
+template<int N_IN, int N_OUT, int N_SAMPLES>
+Eigen::Vector<double, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::get_prediction_conf() const {
+    return prediction_conf_;
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+Eigen::Vector<double, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::get_prediction_maxW() const {
+    return prediction_maxW_;
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+std::array<bool, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::is_confident_about_out() const {    
     std::array<bool, N_OUT> ret;
     for (size_t i=0; i<N_OUT; i++) {
         ret.at(i) = (prediction_maxW_(i) >= w_conf_thresh_); 
@@ -209,8 +237,8 @@ std::array<bool, LWPRWrapper::N_OUT> LWPRWrapper::is_confident_about_out() const
     return ret;
 }
 
-// must be confident for each output
-bool LWPRWrapper::is_confident() const {    
+template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::is_confident() const {    
     for (size_t i=0; i<N_OUT; i++) {
         if (prediction_maxW_(i) < w_conf_thresh_) {
             return false;
@@ -219,7 +247,8 @@ bool LWPRWrapper::is_confident() const {
     return true;
 }
 
-lwpr_wrapper::msg::LWPRInfo LWPRWrapper::getMsgInfo() {
+template<int N_IN, int N_OUT, int N_SAMPLES>
+lwpr_wrapper::msg::LWPRInfo LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::getMsgInfo() {
     if (!impl_) {
         std::cerr << "Error: LWPR model not initialized. Call init() first." << std::endl;
         return lwpr_wrapper::msg::LWPRInfo{};  // Return empty message
@@ -255,20 +284,7 @@ lwpr_wrapper::msg::LWPRInfo LWPRWrapper::getMsgInfo() {
         }
     }
 
-    // std::cout << "n_data: " << lwpr_info_msg.n_data << std::endl;
-    // for(size_t i = 0; i < N_IN; i++) {
-    //     std::cout << "  mean_data[" << i << "]: " << lwpr_info_msg.mean_data.at(i) << std::endl;
-    //     std::cout << "  var_data[" << i << "]: " << lwpr_info_msg.var_data.at(i) << std::endl;
-    // }
-
-    // for(size_t i = 0; i < N_OUT; i++) {
-    //     std::cout << "  prediction[" << i << "]: " << lwpr_info_msg.prediction.at(i) << std::endl;
-    //     std::cout << "  prediction_conf[" << i << "]: " << lwpr_info_msg.prediction_conf.at(i) << std::endl;
-    //     std::cout << "  prediction_maxw[" << i << "]: " << lwpr_info_msg.prediction_maxw.at(i) << std::endl;
-    //     std::cout << "  num_rfs[" << i << "]: " << lwpr_info_msg.num_rfs.at(i) << std::endl;
-    // }
-
     return lwpr_info_msg;
-
 }
 
+}  // namespace lwpr_wrapper

@@ -1,9 +1,6 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
-#include <random>
-#include <chrono>
 #include <Eigen/Dense>
 
 #include <lwpr_wrapper/msg/lwpr_info.hpp>
@@ -12,13 +9,13 @@
 namespace lwpr_wrapper
 {
 
+template<int N_IN, int N_OUT, int N_SAMPLES = 100>
 class LWPRWrapper
 {
 public:
 
-    static constexpr int N_IN = 5;
-    static constexpr int N_OUT = 2;
-    static constexpr int N_SAMPLES = 100;
+    static constexpr int N_IN_c = N_IN;
+    static constexpr int N_OUT_c = N_OUT;
 
     LWPRWrapper();  
     ~LWPRWrapper();
@@ -66,4 +63,10 @@ private:
 
 };
 
-}//namespace
+// Type aliases for default template parameters
+using LWPRWrapper5x2 = LWPRWrapper<5, 2, 100>;
+
+}  // namespace lwpr_wrapper
+
+// Include the template implementation
+#include <lwpr_wrapper/LWPRWrapper.tpp>

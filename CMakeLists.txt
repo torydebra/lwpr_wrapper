@@ -37,10 +37,8 @@ rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_t
 ## Build ##
 ###########
 
-add_library(${PROJECT_NAME}_lib SHARED
-  src/LWPRWrapper.cpp
-)
-target_link_libraries(${PROJECT_NAME}_lib PRIVATE
+add_library(${PROJECT_NAME}_lib INTERFACE)
+target_link_libraries(${PROJECT_NAME}_lib INTERFACE
   lwpr::lwpr
   "${cpp_typesupport_target}"
 )
@@ -70,9 +68,11 @@ endif()
 #############
 
 target_include_directories(${PROJECT_NAME}_lib
-  PUBLIC
+  INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${EIGEN3_INCLUDE_DIRS}
+    ${LWPR_INCLUDE_DIR}
 )
 
 install(
@@ -86,6 +86,7 @@ install(
   DESTINATION lib
 )
 
+ament_export_dependencies(lwpr)
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME}_lib)
 ament_export_targets(export_${PROJECT_NAME}_lib HAS_LIBRARY_TARGET)
