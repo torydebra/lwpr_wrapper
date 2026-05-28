@@ -1,9 +1,10 @@
 #pragma once
 
 #include <memory>
+#include <random>
 #include <Eigen/Dense>
 
-#include <lwpr_wrapper/msg/lwpr_info.hpp>
+#include <lwpr_wrapper_msg/msg/lwpr_info.hpp>
 //#include <lwpr_wrapper/msg/rfs_info.hpp>
 
 namespace lwpr_wrapper
@@ -29,6 +30,8 @@ public:
     Eigen::VectorXd train_single(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);
     bool train_immediately();
+    bool train_immediately(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
+            const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);
     bool train(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);
     
@@ -40,7 +43,7 @@ public:
     Eigen::Vector<double, N_OUT> get_prediction_maxW() const;
     std::array<bool, N_OUT> is_confident_about_out() const;
     bool is_confident() const;
-    lwpr_wrapper::msg::LWPRInfo getMsgInfo();
+    lwpr_wrapper_msg::msg::LWPRInfo getMsgInfo();
 
 private:
     struct Impl;                          // forward declaration
@@ -58,7 +61,7 @@ private:
     int samples_counter_ = 0;
     std::mt19937 rng_;
 
-    lwpr_wrapper::msg::LWPRInfo lwpr_info_msg;
+    lwpr_wrapper_msg::msg::LWPRInfo lwpr_info_msg;
 
 
 };

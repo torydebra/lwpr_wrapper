@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.10.2)
-project(lwpr_wrapper)
+project(lwpr_wrapper_msg)
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -10,17 +11,10 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(std_msgs REQUIRED)
-
 find_package(rosidl_default_generators REQUIRED)
 
-find_package(Eigen3 REQUIRED)
-find_package(lwpr REQUIRED)
+find_package(std_msgs REQUIRED)
 
-include_directories(
-  include
-  ${EIGEN3_INCLUDE_DIRS}
-)
 
 #############
 ## MESSAGES ##
@@ -31,21 +25,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES std_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
-
-###########
-## Build ##
-###########
-
-add_library(${PROJECT_NAME}_lib INTERFACE)
-target_link_libraries(${PROJECT_NAME}_lib INTERFACE
-  lwpr::lwpr
-  "${cpp_typesupport_target}"
-)
-
-set_target_properties(${PROJECT_NAME}_lib PROPERTIES
-  INSTALL_RPATH_USE_LINK_PATH TRUE
-)
 
 #############
 ## Linters ##
@@ -63,31 +42,6 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-#############
-## Install ##
-#############
 
-target_include_directories(${PROJECT_NAME}_lib
-  INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-    ${EIGEN3_INCLUDE_DIRS}
-    ${LWPR_INCLUDE_DIR}
-)
-
-install(
-  DIRECTORY include/
-  DESTINATION include
-)
-
-install(
-  TARGETS ${PROJECT_NAME}_lib
-  EXPORT export_${PROJECT_NAME}_lib
-  DESTINATION lib
-)
-
-ament_export_dependencies(lwpr)
-ament_export_include_directories(include)
-ament_export_libraries(${PROJECT_NAME}_lib)
-ament_export_targets(export_${PROJECT_NAME}_lib HAS_LIBRARY_TARGET)
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()

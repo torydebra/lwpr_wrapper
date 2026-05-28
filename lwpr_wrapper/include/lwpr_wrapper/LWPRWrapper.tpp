@@ -182,6 +182,20 @@ bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train_immediately() {
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
+bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train_immediately(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
+            const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output) { 
+
+    if (samples_counter_ < N_SAMPLES) { //accumulate
+        add_sample(input, output);
+    } 
+
+    train_immediately();
+
+    return true;
+
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
 Eigen::VectorXd LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train_single(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output) { 
 
@@ -248,10 +262,10 @@ bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::is_confident() const {
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
-lwpr_wrapper::msg::LWPRInfo LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::getMsgInfo() {
+lwpr_wrapper_msg::msg::LWPRInfo LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::getMsgInfo() {
     if (!impl_) {
         std::cerr << "Error: LWPR model not initialized. Call init() first." << std::endl;
-        return lwpr_wrapper::msg::LWPRInfo{};  // Return empty message
+        return lwpr_wrapper_msg::msg::LWPRInfo{};  // Return empty message
     }
 
     lwpr_info_msg.n_data = impl_->lwpr->nData();
