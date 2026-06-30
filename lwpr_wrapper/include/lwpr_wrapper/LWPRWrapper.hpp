@@ -21,7 +21,20 @@ public:
     LWPRWrapper();  
     ~LWPRWrapper();
 
-    bool init();
+    void set_expected_input_ranges(
+        const Eigen::Ref<const Eigen::Vector<double, N_IN>>& expected_in_min,
+        const Eigen::Ref<const Eigen::Vector<double, N_IN>>& expected_in_max);
+    void set_expected_output_ranges(
+        const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& expected_out_min,
+        const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& expected_out_max);
+    void set_predict_cutoff(const double& alpha);
+    void set_update_D(const bool& update);
+    void set_initial_D(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& D_diag);
+    void set_initial_alpha(const double& alpha);
+    void set_w_gen(const double& w_gen);
+    void set_w_prune(const double& w_prune);
+    void set_use_meta(const bool& meta);
+    void set_w_conf_tresh(const double& w_conf_thresh);
 
     bool add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);

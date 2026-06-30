@@ -18,65 +18,10 @@ struct LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::Impl {
 };
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
-LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::LWPRWrapper() {}
+LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::LWPRWrapper() {
 
-template<int N_IN, int N_OUT, int N_SAMPLES>
-LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::~LWPRWrapper() = default;
-
-template<int N_IN, int N_OUT, int N_SAMPLES>
-bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::init() {
-
-    // Default is one
-    Eigen::Vector<double, N_IN> expected_in_min;
-    Eigen::Vector<double, N_IN> expected_in_max;
-    Eigen::Vector<double, N_OUT> expected_out_min;
-    Eigen::Vector<double, N_OUT> expected_out_max;
-
-    //IN: x y z sin(yaw) cos(yaw)
-    if (N_IN ==2) {
-        expected_in_min << -8.0, -8.0;
-        expected_in_max << 8.0,  8.0;
-    } else if (N_IN == 3) {
-        expected_in_min << -8.0, -8.0, 0.0;
-        expected_in_max << 8.0,  8.0, 8.0;
-    } else if (N_IN == 5) {
-        expected_in_min << -8.0, -8.0, 0.0, -1.0, -1.0;
-        expected_in_max << 8.0,  8.0, 8.0, 1.0, 1.0;
-    }
-    expected_out_min << -0.5, -1.3; // joint limits
-    expected_out_max << 1.48, 1.3; // joint limits
-    predict_cutoff_ = 0.001; //default 0.001
     impl_ = std::make_unique<Impl>(N_IN, N_OUT);
 
-    // The expected range of each input, divided by 2, just be consistent with init_D
-    // EG. if inputs are 2D position, and we are exploring a square of 2 by 2 meters, norm_is should be [1,1],
-    impl_->lwpr->normIn( (expected_in_max - expected_in_min) / 2.0);
-    impl_->lwpr->normOut( (expected_out_max - expected_out_min) / 2.0);
-
-    // Set to False useful for finding right parameters 
-    impl_->lwpr->updateD(true);
-
-    Eigen::Vector<double, N_IN> D_diag;
-    if (N_IN ==2) {
-        D_diag << 10,10;
-    } else if (N_IN == 3) {
-        D_diag << 10,10,10;
-    } else if (N_IN == 5) {
-        //With 50, result a yaw as
-        // 8deg change in drone yaw produces noticeably different camera corrections
-        D_diag << 1,1,1,5,5;
-    }
-    impl_->lwpr->setInitD(D_diag); // default: 25
-    impl_->lwpr->setInitAlpha(250); // default: 50
-    impl_->lwpr->wGen(0.3); // default: 0.1
-    impl_->lwpr->wPrune(0.8); // default: 0.9
-    impl_->lwpr->useMeta(false);
-
-    //impl_->lwpr->initLambda(0.99); //default = 0.999
-    //impl_->lwpr->finalLambda(0.999); //default = 0.99999
-    //impl_->lwpr->tauLambda(0.9999); //default =  0.9999
-
-    w_conf_thresh_ = 0.6;
     prediction_conf_.setZero();
     prediction_maxW_.setZero();
     prediction_out_.setZero();
@@ -91,8 +36,83 @@ bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::init() {
     lwpr_info_msg.prediction_maxw.resize(N_OUT);
     lwpr_info_msg.num_rfs.resize(N_OUT);
     lwpr_info_msg.rfs_info.resize(N_OUT);
+}
 
-    return true;
+template<int N_IN, int N_OUT, int N_SAMPLES>
+LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::~LWPRWrapper() = default;
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_expected_input_ranges(
+    const Eigen::Ref<const Eigen::Vector<double, N_IN>>& expected_in_min,
+    const Eigen::Ref<const Eigen::Vector<double, N_IN>>& expected_in_max)
+{
+    // Default is one
+    impl_->lwpr->normIn( (expected_in_max - expected_in_min) / 2.0);
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_expected_output_ranges(
+    const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& expected_out_min,
+    const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& expected_out_max)
+{
+    // Default is one
+    impl_->lwpr->normOut( (expected_out_max - expected_out_min) / 2.0);
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_predict_cutoff(
+    const double& predict_cutoff)
+{
+    predict_cutoff_ = predict_cutoff; //default 0.001
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_update_D(
+    const bool& update) 
+{
+    impl_->lwpr->updateD(update);
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_initial_D(
+    const Eigen::Ref<const Eigen::Vector<double, N_IN>>& D_diag)
+{
+    impl_->lwpr->setInitD(D_diag); // default: 25
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_initial_alpha(
+    const double& alpha)
+{
+    impl_->lwpr->setInitAlpha(alpha); // default: 50
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_w_gen(
+    const double& w_gen)
+{
+    impl_->lwpr->wGen(w_gen); // default: 0.1
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_w_prune(
+    const double& w_prune)
+{
+    impl_->lwpr->wPrune(w_prune); // default: 0.9
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_use_meta(
+    const bool& meta)
+{
+    impl_->lwpr->useMeta(meta);
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_w_conf_tresh(
+    const double& w_conf_thresh)
+{
+    w_conf_thresh_ = w_conf_thresh;
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
