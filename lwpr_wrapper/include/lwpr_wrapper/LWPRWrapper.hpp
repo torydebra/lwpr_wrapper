@@ -34,6 +34,9 @@ public:
     void set_w_gen(const double& w_gen);
     void set_w_prune(const double& w_prune);
     void set_use_meta(const bool& meta);
+    void set_init_lambda(const double& init_lambda);
+    void set_final_lambda(const double& final_lambda);
+    void set_tau_lambda(const double& tau_lambda);
     void set_w_conf_tresh(const double& w_conf_thresh);
 
     bool add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 

@@ -109,6 +109,28 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_use_meta(
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_init_lambda(
+    const double& init_lambda)
+{
+    impl_->lwpr->initLambda(init_lambda); // default: 0.999
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_final_lambda(
+    const double& final_lambda)
+{
+    impl_->lwpr->finalLambda(final_lambda); // default: 0.99999
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_tau_lambda(
+    const double& tau_lambda)
+{
+    impl_->lwpr->tauLambda(tau_lambda); //default =  0.9999
+}
+
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
 void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_w_conf_tresh(
     const double& w_conf_thresh)
 {
