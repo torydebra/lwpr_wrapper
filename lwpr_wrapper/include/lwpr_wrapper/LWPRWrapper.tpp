@@ -263,6 +263,9 @@ template<int N_IN, int N_OUT, int N_SAMPLES>
 bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::predict(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input) {
 
     //std::cout << "input is " << input.transpose() << std::endl;
+    if (impl_->lwpr->nData() <= 0) {
+        return false;
+    }
     prediction_out_ = impl_->lwpr->predict(input, prediction_conf_, prediction_maxW_, predict_cutoff_);
     //std::cout << "predicted with maxW=" << prediction_maxW_.transpose() << std::endl;
 
