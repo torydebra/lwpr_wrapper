@@ -37,7 +37,6 @@ public:
     void set_init_lambda(const double& init_lambda);
     void set_final_lambda(const double& final_lambda);
     void set_tau_lambda(const double& tau_lambda);
-    void set_w_conf_tresh(const double& w_conf_thresh);
 
     bool add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);
@@ -55,10 +54,13 @@ public:
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);
    
     Eigen::Vector<double, N_OUT> get_prediction() const;
+    /**
+     * This is not a 0-1 confidence. Is a kind of variance for the prediction.
+     * It is in the same unit of measure of the prediction/output.
+     * Hence, the bigger it is the "less confident" is.
+     */
     Eigen::Vector<double, N_OUT> get_prediction_conf() const;
     Eigen::Vector<double, N_OUT> get_prediction_maxW() const;
-    std::array<bool, N_OUT> is_confident_about_out() const;
-    bool is_confident() const;
     lwpr_wrapper_msg::msg::LWPRInfo getMsgInfo();
 
 private:
@@ -66,7 +68,6 @@ private:
     std::unique_ptr<Impl> impl_;         // hidden implementation
 
     double predict_cutoff_;
-    double w_conf_thresh_;
     Eigen::Vector<double, N_OUT> prediction_conf_;
     Eigen::Vector<double, N_OUT> prediction_maxW_;
     Eigen::Vector<double, N_OUT> prediction_out_;

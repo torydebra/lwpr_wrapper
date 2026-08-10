@@ -129,14 +129,6 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_tau_lambda(
     impl_->lwpr->tauLambda(tau_lambda); //default =  0.9999
 }
 
-
-template<int N_IN, int N_OUT, int N_SAMPLES>
-void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_w_conf_tresh(
-    const double& w_conf_thresh)
-{
-    w_conf_thresh_ = w_conf_thresh;
-}
-
 template<int N_IN, int N_OUT, int N_SAMPLES>
 bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::run(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& sample) {
@@ -285,25 +277,6 @@ Eigen::Vector<double, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::get_prediction
 template<int N_IN, int N_OUT, int N_SAMPLES>
 Eigen::Vector<double, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::get_prediction_maxW() const {
     return prediction_maxW_;
-}
-
-template<int N_IN, int N_OUT, int N_SAMPLES>
-std::array<bool, N_OUT> LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::is_confident_about_out() const {    
-    std::array<bool, N_OUT> ret;
-    for (size_t i=0; i<N_OUT; i++) {
-        ret.at(i) = (prediction_maxW_(i) >= w_conf_thresh_); 
-    }
-    return ret;
-}
-
-template<int N_IN, int N_OUT, int N_SAMPLES>
-bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::is_confident() const {    
-    for (size_t i=0; i<N_OUT; i++) {
-        if (prediction_maxW_(i) < w_conf_thresh_) {
-            return false;
-        } 
-    }
-    return true;
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
