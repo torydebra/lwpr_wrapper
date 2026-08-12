@@ -67,13 +67,6 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_predict_cutoff(
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
-void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_update_D(
-    const bool& update) 
-{
-    impl_->lwpr->updateD(update);
-}
-
-template<int N_IN, int N_OUT, int N_SAMPLES>
 void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_initial_D(
     const Eigen::Ref<const Eigen::Vector<double, N_IN>>& D_diag)
 {
@@ -102,10 +95,10 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_w_prune(
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
-void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_use_meta(
-    const bool& meta)
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_penalty(
+    const double& penalty)
 {
-    impl_->lwpr->useMeta(meta);
+    impl_->lwpr->penalty(penalty); // default: 1e-6
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
@@ -116,6 +109,13 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_init_lambda(
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_tau_lambda(
+    const double& tau_lambda)
+{
+    impl_->lwpr->tauLambda(tau_lambda); //default =  0.9999
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
 void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_final_lambda(
     const double& final_lambda)
 {
@@ -123,11 +123,50 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_final_lambda(
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
-void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_tau_lambda(
-    const double& tau_lambda)
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_init_S2(
+    const double& init_S2) 
 {
-    impl_->lwpr->tauLambda(tau_lambda); //default =  0.9999
+    impl_->lwpr->initS2(init_S2); // default: 1e-10
 }
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_update_D(
+    const bool& update) 
+{
+    impl_->lwpr->updateD(update);
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_diag_only(
+    const bool& diag_only) 
+{
+    impl_->lwpr->diagOnly(diag_only); //default true
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_use_meta(
+    const bool& meta)
+{
+    impl_->lwpr->useMeta(meta);
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_meta_rate(
+    const double& meta_rate) 
+{
+    impl_->lwpr->metaRate(meta_rate); // default: 250
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_kernel(
+    const std::string& kernel)
+{
+    impl_->lwpr->kernel(kernel.c_str()); //"Gaussian" (default) or "BiSquare"
+} 
+
+
+
+
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
 bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::run(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 

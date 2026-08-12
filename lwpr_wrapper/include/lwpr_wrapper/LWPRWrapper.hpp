@@ -28,15 +28,21 @@ public:
         const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& expected_out_min,
         const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& expected_out_max);
     void set_predict_cutoff(const double& alpha);
-    void set_update_D(const bool& update);
+
     void set_initial_D(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& D_diag);
     void set_initial_alpha(const double& alpha);
     void set_w_gen(const double& w_gen);
     void set_w_prune(const double& w_prune);
-    void set_use_meta(const bool& meta);
+    void set_penalty(const double& penalty);
     void set_init_lambda(const double& init_lambda);
-    void set_final_lambda(const double& final_lambda);
     void set_tau_lambda(const double& tau_lambda);
+    void set_final_lambda(const double& final_lambda);
+    void set_init_S2(const double& init_S2);
+    void set_update_D(const bool& update);
+    void set_diag_only(const bool& diag_only);
+    void set_use_meta(const bool& meta);
+    void set_meta_rate(const double& meta_rate);
+    void set_kernel(const std::string& kernel);
 
     bool add_sample(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output);
