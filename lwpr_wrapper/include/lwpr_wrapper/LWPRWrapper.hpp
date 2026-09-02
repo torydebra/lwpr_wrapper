@@ -4,8 +4,8 @@
 #include <random>
 #include <Eigen/Dense>
 
+#include <visualization_msgs/msg/marker_array.hpp>
 #include <lwpr_wrapper_msg/msg/lwpr_info.hpp>
-//#include <lwpr_wrapper/msg/rfs_info.hpp>
 
 namespace lwpr_wrapper
 {
@@ -68,6 +68,7 @@ public:
     Eigen::Vector<double, N_OUT> get_prediction_conf() const;
     Eigen::Vector<double, N_OUT> get_prediction_maxW() const;
     lwpr_wrapper_msg::msg::LWPRInfo getMsgInfo();
+    visualization_msgs::msg::MarkerArray getRFMarkers() const requires (N_IN >= 3);
 
 private:
     struct Impl;                          // forward declaration
@@ -83,6 +84,9 @@ private:
     Eigen::Matrix<double, N_OUT, N_SAMPLES> samples_out_;
     int samples_counter_ = 0;
     std::mt19937 rng_;
+
+    Eigen::DiagonalMatrix<double, N_IN> norm_factor_in_;
+    Eigen::DiagonalMatrix<double, N_OUT> norm_factor_out_;
 
     lwpr_wrapper_msg::msg::LWPRInfo lwpr_info_msg;
 

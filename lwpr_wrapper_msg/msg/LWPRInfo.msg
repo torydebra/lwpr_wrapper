@@ -10,6 +10,4 @@ float64[] prediction_conf
 float64[] prediction_maxw
 
 ## RFS (vector because one group of rf for each output)
-int32[] num_rfs
-
-lwpr_wrapper_msg/RfsInfo[] rfs_info #SIZE: number of output
+lwpr_wrapper_msg/RfsInfo[] rfs_info_per_output #SIZE: number of output

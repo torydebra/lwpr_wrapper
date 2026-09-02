@@ -34,8 +34,8 @@ LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::LWPRWrapper() {
     lwpr_info_msg.prediction.resize(N_OUT);
     lwpr_info_msg.prediction_conf.resize(N_OUT);
     lwpr_info_msg.prediction_maxw.resize(N_OUT);
-    lwpr_info_msg.num_rfs.resize(N_OUT);
-    lwpr_info_msg.rfs_info.resize(N_OUT);
+    lwpr_info_msg.rfs_info_per_output.resize(N_OUT);
+
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
@@ -48,6 +48,10 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_expected_input_ranges(
 {
     // Default is one
     impl_->lwpr->normIn( (expected_in_max - expected_in_min) / 2.0);
+
+    for (int i = 0; i < N_IN; ++i) {
+        norm_factor_in_.diagonal()(i) = impl_->lwpr->normIn().at(i);
+    }
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
@@ -57,6 +61,10 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_expected_output_ranges(
 {
     // Default is one
     impl_->lwpr->normOut( (expected_out_max - expected_out_min) / 2.0);
+
+    for (int i = 0; i < N_OUT; ++i) {
+        norm_factor_out_.diagonal()(i) = impl_->lwpr->normOut().at(i);
+    }
 }
 
 template<int N_IN, int N_OUT, int N_SAMPLES>
@@ -165,26 +173,23 @@ void LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::set_kernel(
 } 
 
 
-
-
-
 template<int N_IN, int N_OUT, int N_SAMPLES>
 bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::run(const Eigen::Ref<const Eigen::Vector<double, N_IN>>& input, 
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& sample) {
 
-    std::cout << "sample is " << sample.transpose() << std::endl;
+    //std::cout << "sample is " << sample.transpose() << std::endl;
     predict(input);
-    std::cout << "predicted with maxW=" << prediction_maxW_.transpose() << std::endl;
+    //std::cout << "predicted with maxW=" << prediction_maxW_.transpose() << std::endl;
     
     bool to_update = false;
     if (impl_->lwpr->nData() < 1000) {
         to_update = true;
-        std::cout << "WARN: too few samples so far, updating. " << impl_->lwpr->nData() << std::endl;
+        std::cerr << "WARN: too few samples so far, updating. " << impl_->lwpr->nData() << std::endl;
     } else {
         for (int i=0; i<N_OUT; ++i) {
             if (prediction_maxW_(i) < impl_->lwpr->wGen()) { 
                 to_update = true;
-                std::cout << "WARN: MaxW too low: " << prediction_maxW_.transpose() <<
+                std::cerr << "WARN: MaxW too low: " << prediction_maxW_.transpose() <<
                     ", conf: " << prediction_conf_.transpose() << 
                     ", maxw: " << prediction_maxW_.transpose() << 
                     " with input " << input.transpose() << 
@@ -198,7 +203,7 @@ bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::run(const Eigen::Ref<const Eigen::Vect
 
         // this return useful?
         update_out_ = impl_->lwpr->update(input, sample);
-        std::cout << "   Update result out: " << update_out_.transpose() << std::endl;
+        //std::cout << "   Update result out: " << update_out_.transpose() << std::endl;
     }
 
     return true;
@@ -209,7 +214,7 @@ bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::add_sample(const Eigen::Ref<const Eige
             const Eigen::Ref<const Eigen::Vector<double, N_OUT>>& output) {
 
     if (samples_counter_ == N_SAMPLES) {
-        std::cout << "Samples buffer is full, cant add this sample" << std::endl;
+        std::cerr << "Samples buffer is full, cant add this sample" << std::endl;
         return false;
     }
 
@@ -230,7 +235,7 @@ template<int N_IN, int N_OUT, int N_SAMPLES>
 bool LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::train_immediately() { 
 
     if (samples_counter_ == 0) {
-        std::cout << "Cannot train, no samples" << std::endl;
+        std::cerr << "Cannot train, no samples" << std::endl;
         return false;
     }
 
@@ -334,28 +339,148 @@ lwpr_wrapper_msg::msg::LWPRInfo LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::getMsgInfo(
 
     for(int i = 0; i < N_OUT; i++) {
         lwpr_info_msg.prediction.at(i) = prediction_out_(i);
+        lwpr_info_msg.prediction.at(i) = prediction_out_(i);
         lwpr_info_msg.prediction_conf.at(i) = prediction_conf_(i);
         lwpr_info_msg.prediction_maxw.at(i) = prediction_maxW_(i);
-        lwpr_info_msg.num_rfs.at(i) = impl_->lwpr->numRFS().at(i);
     }
 
     for (int out=0; out < N_OUT; out++) {
-        lwpr_info_msg.rfs_info.at(out).n_data.resize(impl_->lwpr->numRFS().at(out));
-        lwpr_info_msg.rfs_info.at(out).mean_data.resize(impl_->lwpr->numRFS().at(out));
-        lwpr_info_msg.rfs_info.at(out).var_data.resize(impl_->lwpr->numRFS().at(out));
-        lwpr_info_msg.rfs_info.at(out).trustworthy.resize(impl_->lwpr->numRFS().at(out));
-        lwpr_info_msg.rfs_info.at(out).w.resize(impl_->lwpr->numRFS().at(out));
+        lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.resize(impl_->lwpr->numRFS().at(out));
         for (int i=0; i<impl_->lwpr->numRFS().at(out); i++) {
             const auto rf = impl_->lwpr->getRF(out, i);
-            lwpr_info_msg.rfs_info.at(out).n_data.at(i) = rf.w();
-            lwpr_info_msg.rfs_info.at(out).mean_data.at(i) = rf.w();
-            lwpr_info_msg.rfs_info.at(out).var_data.at(i) = rf.w();
-            lwpr_info_msg.rfs_info.at(out).trustworthy.at(i) = rf.w();
-            lwpr_info_msg.rfs_info.at(out).w.at(i) = rf.trustworthy();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).weight = rf.w();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).n_reg = rf.nReg();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).num_data = rf.numData();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).mean_data = rf.meanX();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).var_data = rf.varX();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).center = rf.center();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).d.clear();
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).d.reserve(N_IN * N_IN);
+            //row major
+            for (const auto& row : rf.D()) {
+                lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).d.insert(
+                    lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).d.end(), 
+                    row.begin(), row.end());
+            }
+            lwpr_info_msg.rfs_info_per_output.at(out).rfs_info.at(i).trustworthy = rf.trustworthy();
         }
     }
 
     return lwpr_info_msg;
+}
+
+template<int N_IN, int N_OUT, int N_SAMPLES>
+visualization_msgs::msg::MarkerArray 
+LWPRWrapper<N_IN, N_OUT, N_SAMPLES>::getRFMarkers() const requires (N_IN >= 3){
+
+    visualization_msgs::msg::MarkerArray rfs_markers;
+    
+    for (int out = 0; out < N_OUT; ++out)
+    {
+        for (int rf_idx = 0; rf_idx < impl_->lwpr->numRFS().at(out); rf_idx++)
+        {
+            const auto rf = impl_->lwpr->getRF(out, rf_idx);
+
+            visualization_msgs::msg::Marker marker;
+
+            marker.ns = "out_" + std::to_string(out);
+            marker.id = rf_idx;
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+
+            //----------------------------------
+            // center
+            //----------------------------------
+
+            auto center = rf.center();
+
+            marker.pose.position.x = center[0] * norm_factor_in_.diagonal()(0);
+            marker.pose.position.y = center[1] * norm_factor_in_.diagonal()(1);
+            marker.pose.position.z = center[2] * norm_factor_in_.diagonal()(2);
+
+            //----------------------------------
+            // D matrix
+            //----------------------------------
+
+            Eigen::Matrix<double, 3, 3> D;
+            const auto rf_d = rf.D();
+
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c)
+                    D(r,c) = rf_d.at(r).at(c);
+
+            auto N3 = norm_factor_in_.diagonal().template head<3>().cwiseInverse().asDiagonal();
+
+            D = N3 * D * N3;
+
+            //----------------------------------
+            // eigendecomposition
+            //----------------------------------
+
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(D);
+
+            const Eigen::Vector<double, 3> lambda = eig.eigenvalues();
+            Eigen::Matrix<double, 3, 3> Q = eig.eigenvectors();
+            if (Q.determinant() < 0.0) {
+                Q.col(0) *= -1.0;   // flip one column to restore a proper rotation
+            }
+
+            //----------------------------------
+            // orientation
+            //----------------------------------
+
+            Eigen::Quaterniond q(Q);
+            q.normalize();
+
+            marker.pose.orientation.x = q.x();
+            marker.pose.orientation.y = q.y();
+            marker.pose.orientation.z = q.z();
+            marker.pose.orientation.w = q.w();
+
+            //----------------------------------
+            // size
+            //----------------------------------
+
+            constexpr double sigma_level = 2.0; //2 sigma: 95% mass of the gaussian
+
+            marker.scale.x =
+                2.0 * sigma_level / std::sqrt(lambda(0));
+
+            marker.scale.y =
+                2.0 * sigma_level / std::sqrt(lambda(1));
+
+            marker.scale.z =
+                2.0 * sigma_level / std::sqrt(lambda(2));
+
+            //----------------------------------
+            // color
+            //----------------------------------
+
+            if (out == 0) {
+                marker.color.r = 1.0;
+                marker.color.g = 0.0;
+                marker.color.b = 0.0;
+            } else if (out == 1) {
+                marker.color.r = 0.0;
+                marker.color.g = 1.0;
+                marker.color.b = 0.0;
+            } else if (out == 2){
+                marker.color.r = 0.0;
+                marker.color.g = 0.0;
+                marker.color.b = 1.0;
+            } else {
+                marker.color.r = 1.0;
+                marker.color.g = 0.0;
+                marker.color.b = 1.0;
+            }
+
+            marker.color.a = std::clamp(float(rf.w()), 0.2f, 0.8f);
+
+            rfs_markers.markers.push_back(marker);
+        }
+    }
+
+    return rfs_markers;
 }
 
 }  // namespace lwpr_wrapper
